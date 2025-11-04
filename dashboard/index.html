@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deployment Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .dashboard {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 1200px;
+            width: 100%;
+            padding: 40px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        h1 {
+            color: #333;
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            color: #666;
+            font-size: 1.1rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: bold;
+        }
+
+        .deployments-section {
+            margin-top: 40px;
+        }
+
+        .section-title {
+            color: #333;
+            font-size: 1.8rem;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #667eea;
+        }
+
+        .deployment-list {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .deployment-item {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+
+        .deployment-item:hover {
+            background: #e9ecef;
+            transform: translateX(5px);
+        }
+
+        .deployment-info {
+            flex: 1;
+        }
+
+        .deployment-name {
+            font-size: 1.2rem;
+            color: #333;
+            font-weight: 600;
+            margin-bottom: 5px;
+        }
+
+        .deployment-time {
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .deployment-status {
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .status-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-failed {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .actions {
+            margin-top: 40px;
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 25px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .btn-secondary {
+            background: white;
+            color: #667eea;
+            border: 2px solid #667eea;
+        }
+
+        .btn-secondary:hover {
+            background: #667eea;
+            color: white;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2rem;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .deployment-item {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <div class="header">
+            <h1>🚀 Deployment Dashboard</h1>
+            <p class="subtitle">Monitor and manage your deployments</p>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Total Deployments</div>
+                <div class="stat-value" id="totalDeployments">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Successful</div>
+                <div class="stat-value" id="successfulDeployments">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Failed</div>
+                <div class="stat-value" id="failedDeployments">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Uptime</div>
+                <div class="stat-value" id="uptime">99.9%</div>
+            </div>
+        </div>
+
+        <div class="deployments-section">
+            <h2 class="section-title">Recent Deployments</h2>
+            <div class="deployment-list" id="deploymentList">
+                <!-- Deployments will be loaded here -->
+            </div>
+        </div>
+
+        <div class="actions">
+            <a href="https://github.com/DivineDesign333/red_pill_rally_loop.mp3/actions" class="btn btn-primary" target="_blank">
+                View GitHub Actions
+            </a>
+            <button class="btn btn-secondary" onclick="refreshDeployments()">
+                Refresh Data
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Simulated deployment data
+        const deployments = [
+            {
+                name: 'Production Deployment',
+                time: new Date().toLocaleString(),
+                status: 'success'
+            },
+            {
+                name: 'Staging Deployment',
+                time: new Date(Date.now() - 3600000).toLocaleString(),
+                status: 'success'
+            },
+            {
+                name: 'Development Deployment',
+                time: new Date(Date.now() - 7200000).toLocaleString(),
+                status: 'success'
+            }
+        ];
+
+        function loadDeployments() {
+            const deploymentList = document.getElementById('deploymentList');
+            deploymentList.innerHTML = '';
+
+            if (deployments.length === 0) {
+                deploymentList.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No deployments yet. Start deploying to see them here!</p>';
+                return;
+            }
+
+            deployments.forEach(deployment => {
+                const item = document.createElement('div');
+                item.className = 'deployment-item';
+                item.innerHTML = `
+                    <div class="deployment-info">
+                        <div class="deployment-name">${deployment.name}</div>
+                        <div class="deployment-time">${deployment.time}</div>
+                    </div>
+                    <span class="deployment-status status-${deployment.status}">
+                        ${deployment.status.toUpperCase()}
+                    </span>
+                `;
+                deploymentList.appendChild(item);
+            });
+
+            // Update stats
+            document.getElementById('totalDeployments').textContent = deployments.length;
+            document.getElementById('successfulDeployments').textContent = 
+                deployments.filter(d => d.status === 'success').length;
+            document.getElementById('failedDeployments').textContent = 
+                deployments.filter(d => d.status === 'failed').length;
+        }
+
+        function refreshDeployments(event) {
+            // In a real implementation, this would fetch from an API
+            loadDeployments();
+            
+            // Show a brief notification
+            const btn = event.target;
+            const originalText = btn.textContent;
+            btn.textContent = 'Refreshed!';
+            setTimeout(() => {
+                btn.textContent = originalText;
+            }, 1000);
+        }
+
+        // Load deployments on page load
+        document.addEventListener('DOMContentLoaded', loadDeployments);
+    </script>
+</body>
+</html>

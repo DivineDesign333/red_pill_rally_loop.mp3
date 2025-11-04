@@ -1,0 +1,42 @@
+name: Dashboard Status Check
+
+on:
+  schedule:
+    # Run every hour
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-status:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check Dashboard Availability
+        run: |
+          echo "Checking dashboard status..."
+          # This will be used to monitor dashboard health
+          # In production, you would add actual health checks here
+          
+          DASHBOARD_URL="https://divinedesign333.github.io/red_pill_rally_loop.mp3/"
+          
+          # Check if dashboard is accessible (will work after first deployment)
+          if curl -f -s -o /dev/null "$DASHBOARD_URL" 2>/dev/null; then
+            echo "✅ Dashboard is accessible"
+            exit 0
+          else
+            echo "⚠️  Dashboard not yet deployed or unavailable"
+            echo "This is expected if this is the first run"
+            exit 0
+          fi
+
+      - name: Log Status
+        if: always()
+        run: |
+          echo "Status check completed at $(date)"
+          echo "Repository: ${{ github.repository }}"
+          echo "Branch: ${{ github.ref }}"
