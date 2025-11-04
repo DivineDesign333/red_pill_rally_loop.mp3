@@ -189,7 +189,7 @@ else
 fi
 THREADS=${THREADS:-$procs}
 LATEST_VERSION=$(curl -s "https://api.github.com/repos/mudler/LocalAI/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
-LOCALAI_VERSION="${LOCALAI_VERSION:-$LATEST_VERSION}" #changed due to VERSION beign already defined in Fedora 42 Cloud Edition
+LOCALAI_VERSION="${LOCALAI_VERSION:-$LATEST_VERSION}" #changed due to VERSION being already defined in Fedora 42 Cloud Edition
 MODELS_PATH=${MODELS_PATH:-/usr/share/local-ai/models}
 
 
@@ -200,7 +200,7 @@ check_gpu() {
             case $2 in
                 nvidia) available lspci && lspci -d '10de:' | grep -q 'NVIDIA' || return 1 ;;
                 amdgpu) available lspci && lspci -d '1002:' | grep -q 'AMD' || return 1 ;;
-                intel) available lspci && lspci | grep -E 'VGA|3D' | grep -iq intel | return 1 ;;
+                intel) available lspci && lspci | grep -E 'VGA|3D' | grep -iq intel && return 1 ;;
             esac ;;
         lshw)
             case $2 in
@@ -305,7 +305,7 @@ install_container_toolkit_yum() {
         fi
     else
         $SUDO $PACKAGE_MANAGER -y install yum-utils
-        $SUDO $PACKAGE_MANAGER-config-manager --enable nvidia-container-toolkit-experimental
+        $SUDO $PACKAGE_MANAGER -config-manager --enable nvidia-container-toolkit-experimental
     fi
     $SUDO $PACKAGE_MANAGER install -y nvidia-container-toolkit
 }
@@ -363,7 +363,7 @@ install_container_toolkit_apt() {
     sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
     $SUDO tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
 
-    $SUDO sudo apt-get update && $SUDO apt-get install -y nvidia-container-toolkit
+    $SUDO apt-get update && $SUDO apt-get install -y nvidia-container-toolkit
 }
 
 # ref: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html#installing-with-zypper
@@ -431,7 +431,7 @@ install_cuda_driver_yum() {
     case $PACKAGE_MANAGER in
         yum)
             $SUDO $PACKAGE_MANAGER -y install yum-utils
-            $SUDO $PACKAGE_MANAGER-config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/$1$2/$(uname -m)/cuda-$1$2.repo
+            $SUDO $PACKAGE_MANAGER -config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/$1$2/$(uname -m)/cuda-$1$2.repo
             ;;
         dnf)
             DNF_VERSION=$($PACKAGE_MANAGER --version | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n1 | cut -d. -f1)
@@ -495,11 +495,11 @@ install_fedora_nvidia_kernel_drivers(){
 
       if [ "$DNF_VERSION" -ge 5 ]; then
           # DNF5:
-          $SUDO $PACKAGE_MANAGER install -y "rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm" "rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
+          $SUDO $PACKAGE_MANAGER install -y "rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" "rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
           $SUDO $PACKAGE_MANAGER install -y akmod-nvidia
       else
           # DNF4:
-          $SUDO $PACKAGE_MANAGER install -y "rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm" "rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
+          $SUDO $PACKAGE_MANAGER install -y "rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" "rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
           $SUDO $PACKAGE_MANAGER install -y akmod-nvidia
       fi
 
@@ -733,7 +733,7 @@ install_docker() {
             $envs \
             -d -p $PORT:8080 --name local-ai localai/localai:$IMAGE_TAG $STARTCOMMAND
 
-    elif [ "$HAS_AMD" ]; then
+    elif [ "$HAS_AMD" = true ]; then
         IMAGE_TAG=${LOCALAI_VERSION}-gpu-hipblas
         # AIO
         if [ "$USE_AIO" = true ]; then
