@@ -191,6 +191,7 @@ THREADS=${THREADS:-$procs}
 LATEST_VERSION=$(curl -s "https://api.github.com/repos/mudler/LocalAI/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
 LOCALAI_VERSION="${LOCALAI_VERSION:-$LATEST_VERSION}" #changed due to VERSION being already defined in Fedora 42 Cloud Edition
 MODELS_PATH=${MODELS_PATH:-/usr/share/local-ai/models}
+FEDORA_CUDA_VERSION=${FEDORA_CUDA_VERSION:-41}  # Fedora CUDA version for fallback
 
 
 check_gpu() {
@@ -200,7 +201,7 @@ check_gpu() {
             case $2 in
                 nvidia) available lspci && lspci -d '10de:' | grep -q 'NVIDIA' || return 1 ;;
                 amdgpu) available lspci && lspci -d '1002:' | grep -q 'AMD' || return 1 ;;
-                intel) available lspci && lspci | grep -E 'VGA|3D' | grep -iq intel && return 1 ;;
+                intel) available lspci && lspci | grep -E 'VGA|3D' | grep -iq intel || return 1 ;;
             esac ;;
         lshw)
             case $2 in
@@ -258,18 +259,18 @@ WantedBy=default.target
 EOF
 
     $SUDO touch /etc/localai.env
-    $SUDO echo "ADDRESS=0.0.0.0:$PORT" | $SUDO tee /etc/localai.env >/dev/null
-    $SUDO echo "API_KEY=$API_KEY" | $SUDO tee -a /etc/localai.env >/dev/null
-    $SUDO echo "THREADS=$THREADS" | $SUDO tee -a /etc/localai.env >/dev/null
-    $SUDO echo "MODELS_PATH=$MODELS_PATH" | $SUDO tee -a /etc/localai.env >/dev/null
+    echo "ADDRESS=0.0.0.0:$PORT" | $SUDO tee /etc/localai.env >/dev/null
+    echo "API_KEY=$API_KEY" | $SUDO tee -a /etc/localai.env >/dev/null
+    echo "THREADS=$THREADS" | $SUDO tee -a /etc/localai.env >/dev/null
+    echo "MODELS_PATH=$MODELS_PATH" | $SUDO tee -a /etc/localai.env >/dev/null
 
     if [ -n "$P2P_TOKEN" ]; then
-        $SUDO echo "LOCALAI_P2P_TOKEN=$P2P_TOKEN" | $SUDO tee -a /etc/localai.env >/dev/null
-        $SUDO echo "LOCALAI_P2P=true" | $SUDO tee -a /etc/localai.env >/dev/null
+        echo "LOCALAI_P2P_TOKEN=$P2P_TOKEN" | $SUDO tee -a /etc/localai.env >/dev/null
+        echo "LOCALAI_P2P=true" | $SUDO tee -a /etc/localai.env >/dev/null
     fi
 
     if [ "$LOCALAI_P2P_DISABLE_DHT" = true ]; then
-        $SUDO echo "LOCALAI_P2P_DISABLE_DHT=true" | $SUDO tee -a /etc/localai.env >/dev/null
+        echo "LOCALAI_P2P_DISABLE_DHT=true" | $SUDO tee -a /etc/localai.env >/dev/null
     fi
 
     SYSTEMCTL_RUNNING="$(systemctl is-system-running || true)"
@@ -305,7 +306,7 @@ install_container_toolkit_yum() {
         fi
     else
         $SUDO $PACKAGE_MANAGER -y install yum-utils
-        $SUDO $PACKAGE_MANAGER -config-manager --enable nvidia-container-toolkit-experimental
+        $SUDO $PACKAGE_MANAGER -y config-manager --enable nvidia-container-toolkit-experimental
     fi
     $SUDO $PACKAGE_MANAGER install -y nvidia-container-toolkit
 }
@@ -318,11 +319,11 @@ enable_selinux_container_booleans() {
     # Check SELinux mode
     SELINUX_MODE=$(getenforce)
 
-    if [ "$SELINUX_MODE" == "Enforcing" ]; then
+    if [ "$SELINUX_MODE" = "Enforcing" ]; then
         # Check the status of container_use_devices
         CONTAINER_USE_DEVICES=$(getsebool container_use_devices | awk '{print $3}')
 
-       if [ "$CONTAINER_USE_DEVICES" == "off" ]; then
+       if [ "$CONTAINER_USE_DEVICES" = "off" ]; then
 
           #We want to give the user the choice to enable the SE booleans since it is a security config
           warn "+-----------------------------------------------------------------------------------------------------------+"
@@ -506,7 +507,7 @@ install_fedora_nvidia_kernel_drivers(){
       $SUDO rm "rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm"
       $SUDO rm "rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
 
-      install_cuda_driver_yum $OS_NAME '41'
+      install_cuda_driver_yum $OS_NAME $FEDORA_CUDA_VERSION
 
       info "Nvidia driver installation complete, please reboot now and run the Install script again to complete the setup."
       exit
@@ -562,7 +563,7 @@ install_cuda() {
         case $OS_NAME in
             centos|rhel) install_cuda_driver_yum 'rhel' $(echo $OS_VERSION | cut -d '.' -f 1) ;;
             rocky) install_cuda_driver_yum 'rhel' $(echo $OS_VERSION | cut -c1) ;;
-            fedora) [ $OS_VERSION -lt '41' ] && install_cuda_driver_yum $OS_NAME $OS_VERSION || install_cuda_driver_yum $OS_NAME '41';;
+            fedora) [ $OS_VERSION -lt "$FEDORA_CUDA_VERSION" ] && install_cuda_driver_yum $OS_NAME $OS_VERSION || install_cuda_driver_yum $OS_NAME $FEDORA_CUDA_VERSION;;
             amzn) install_cuda_driver_yum 'fedora' '37' ;;
             debian) install_cuda_driver_apt $OS_NAME $OS_VERSION ;;
             ubuntu) install_cuda_driver_apt $OS_NAME $(echo $OS_VERSION | sed 's/\.//') ;;
@@ -750,7 +751,7 @@ install_docker() {
             -e THREADS=$THREADS \
             $envs \
             -d -p $PORT:8080 --name local-ai localai/localai:$IMAGE_TAG $STARTCOMMAND
-    elif [ "$HAS_INTEL" ]; then
+    elif [ "$HAS_INTEL" = true ]; then
         IMAGE_TAG=${LOCALAI_VERSION}-gpu-intel
         # AIO
         if [ "$USE_AIO" = true ]; then
