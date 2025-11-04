@@ -3,7 +3,7 @@
 # This file contains build and runtime configuration flags
 
 # Enable Vulkan graphics API support
-USE_VULKAN=true
+export USE_VULKAN=true
 
 # Enable Async I/O support
-USE_AIO=true
+export USE_AIO=true
