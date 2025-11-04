@@ -1,0 +1,38 @@
+{
+  "launchDate": "2025-01-01T00:00:00Z",
+  "bpm": 128,
+  "overlay": {
+    "width": 1920,
+    "height": 1080,
+    "refreshInterval": 100
+  },
+  "bounceDetector": {
+    "minBouncePercent": 5,
+    "timeWindow": 300000,
+    "volumeThreshold": 1.5
+  },
+  "mlFilter": {
+    "confidenceThreshold": 0.7,
+    "learningRate": 0.01
+  },
+  "robinhood": {
+    "mode": "paper",
+    "apiKey": "demo",
+    "maxPositionSize": 1000
+  },
+  "simulator": {
+    "initialBalance": 10000,
+    "commissionRate": 0.001,
+    "slippage": 0.002
+  },
+  "botPanel": {
+    "maxConcurrentTrades": 3,
+    "autoTradeEnabled": false,
+    "riskPerTrade": 0.02
+  },
+  "backtester": {
+    "initialCapital": 10000,
+    "commission": 0.001,
+    "slippage": 0.002
+  }
+}

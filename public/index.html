@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meme Coin Launch Dashboard</title>
+    <link rel="stylesheet" href="/css/dashboard.css">
+</head>
+<body>
+    <div class="dashboard">
+        <header class="dashboard-header">
+            <h1>🚀 Meme Coin Launch Dashboard</h1>
+            <div class="header-status">
+                <span class="status-indicator" id="connectionStatus">●</span>
+                <span id="statusText">Connected</span>
+            </div>
+        </header>
+
+        <div class="dashboard-grid">
+            <!-- Countdown Timer -->
+            <div class="module countdown-module">
+                <h2>⏰ Launch Countdown</h2>
+                <div class="countdown-display" id="countdownDisplay">
+                    <div class="time-unit">
+                        <span class="time-value" id="days">00</span>
+                        <span class="time-label">Days</span>
+                    </div>
+                    <div class="time-unit">
+                        <span class="time-value" id="hours">00</span>
+                        <span class="time-label">Hours</span>
+                    </div>
+                    <div class="time-unit">
+                        <span class="time-value" id="minutes">00</span>
+                        <span class="time-label">Minutes</span>
+                    </div>
+                    <div class="time-unit">
+                        <span class="time-value" id="seconds">00</span>
+                        <span class="time-label">Seconds</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Beat Sync -->
+            <div class="module beat-module">
+                <h2>🎵 Beat Sync</h2>
+                <div class="beat-visualizer">
+                    <div class="beat-indicator" id="beatIndicator"></div>
+                    <div class="beat-info">
+                        <p>BPM: <span id="bpmDisplay">120</span></p>
+                        <p>Beat: <span id="beatCount">0</span></p>
+                    </div>
+                    <div class="bpm-controls">
+                        <input type="range" id="bpmSlider" min="60" max="180" value="120">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Bounce Detector -->
+            <div class="module bounce-module">
+                <h2>📊 Bounce Signals</h2>
+                <div class="bounce-stats">
+                    <div class="stat">
+                        <span class="stat-label">Total Signals:</span>
+                        <span class="stat-value" id="totalSignals">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Avg Strength:</span>
+                        <span class="stat-value" id="avgStrength">0</span>
+                    </div>
+                </div>
+                <div class="signal-list" id="signalList"></div>
+            </div>
+
+            <!-- ML Filter -->
+            <div class="module ml-module">
+                <h2>🧠 ML Filter</h2>
+                <div class="ml-stats">
+                    <div class="stat">
+                        <span class="stat-label">Predictions:</span>
+                        <span class="stat-value" id="mlPredictions">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Confidence:</span>
+                        <span class="stat-value" id="mlConfidence">0%</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Filter Rate:</span>
+                        <span class="stat-value" id="mlFilterRate">0%</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Trading Panel -->
+            <div class="module trading-module">
+                <h2>🛒 Trading</h2>
+                <div class="mode-selector">
+                    <button class="mode-btn active" data-mode="simulated">🧪 Simulated</button>
+                    <button class="mode-btn" data-mode="live">💰 Live</button>
+                </div>
+                <div class="trade-form">
+                    <input type="text" id="tradeSymbol" placeholder="Symbol" value="MEME">
+                    <input type="number" id="tradeQuantity" placeholder="Quantity" value="10">
+                    <button class="btn btn-buy" id="buyBtn">Buy</button>
+                    <button class="btn btn-sell" id="sellBtn">Sell</button>
+                </div>
+                <div class="performance" id="performance">
+                    <p>Balance: $<span id="balance">10000</span></p>
+                    <p>P&L: <span id="pnl">$0</span></p>
+                    <p>Return: <span id="return">0%</span></p>
+                </div>
+            </div>
+
+            <!-- Bot Control -->
+            <div class="module bot-module">
+                <h2>🤖 Bot Control</h2>
+                <div class="bot-controls">
+                    <button class="btn" id="createBotBtn">Create Bot</button>
+                    <button class="btn" id="startAllBots">Start All</button>
+                    <button class="btn" id="stopAllBots">Stop All</button>
+                </div>
+                <div class="bot-stats">
+                    <p>Total Bots: <span id="totalBots">0</span></p>
+                    <p>Running: <span id="runningBots">0</span></p>
+                    <p>Total Trades: <span id="botTrades">0</span></p>
+                </div>
+                <div class="bot-list" id="botList"></div>
+            </div>
+
+            <!-- Backtesting -->
+            <div class="module backtest-module">
+                <h2>📈 Backtesting</h2>
+                <button class="btn" id="runBacktestBtn">Run Backtest</button>
+                <div class="backtest-results" id="backtestResults">
+                    <p>No results yet</p>
+                </div>
+            </div>
+
+            <!-- OBS Overlay -->
+            <div class="module obs-module">
+                <h2>🎥 OBS Overlay</h2>
+                <div class="obs-info">
+                    <p>Browser Source URL:</p>
+                    <input type="text" id="obsUrl" readonly class="obs-url">
+                    <button class="btn" id="copyObsUrl">Copy URL</button>
+                </div>
+                <div class="overlay-presets">
+                    <button class="preset-btn" data-preset="minimal">Minimal</button>
+                    <button class="preset-btn" data-preset="full">Full</button>
+                    <button class="preset-btn" data-preset="streamFocus">Stream Focus</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/dashboard.js"></script>
+</body>
+</html>
