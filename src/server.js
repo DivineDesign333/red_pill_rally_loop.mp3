@@ -4,7 +4,7 @@
  */
 
 import express from 'express';
-import { WebSocketServer } from 'ws';
+import { WebSocketServer, WebSocket } from 'ws';
 import cors from 'cors';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -216,7 +216,7 @@ wss.on('connection', (ws) => {
   
   // Subscribe to updates
   const unsubscribe = dashboard.onUpdate((state) => {
-    if (ws.readyState === ws.OPEN) {
+    if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(state));
     }
   });

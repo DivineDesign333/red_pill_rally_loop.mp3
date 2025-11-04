@@ -99,16 +99,18 @@ export class BacktestEngine {
         return { success: false, error: 'No position to sell' };
       }
 
-      const revenue = quantity * price;
+      // Use position quantity if not specified in signal
+      const sellQuantity = signal.quantity || position.quantity;
+      const revenue = sellQuantity * price;
       const netRevenue = revenue * (1 - this.config.commission - this.config.slippage);
-      const profit = netRevenue - (position.entryPrice * quantity);
-      const profitPercent = (profit / (position.entryPrice * quantity)) * 100;
+      const profit = netRevenue - (position.entryPrice * sellQuantity);
+      const profitPercent = (profit / (position.entryPrice * sellQuantity)) * 100;
 
       return {
         success: true,
         action: 'SELL',
         symbol: signal.symbol,
-        quantity,
+        quantity: sellQuantity,
         price,
         revenue: netRevenue,
         profit,

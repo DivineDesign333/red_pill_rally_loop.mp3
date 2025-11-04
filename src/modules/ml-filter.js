@@ -74,8 +74,16 @@ export class MLFilter {
     // Simple gradient descent
     for (let i = 0; i < signals.length; i++) {
       const features = this.extractFeatures(signals[i]);
-      const prediction = this.predict(signals[i]);
-      const error = labels[i] - prediction.probability;
+      
+      // Calculate prediction without side effects
+      let score = this.model.bias;
+      for (const [key, value] of Object.entries(features)) {
+        const weight = this.model.weights[key] || 0;
+        score += weight * value;
+      }
+      const probability = 1 / (1 + Math.exp(-score));
+      
+      const error = labels[i] - probability;
 
       // Update weights
       for (const [key, value] of Object.entries(features)) {
