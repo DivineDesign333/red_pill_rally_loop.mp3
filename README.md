@@ -15,7 +15,7 @@ This repository includes an automated deployment dashboard that monitors and dis
 #### View the Dashboard
 Once deployed, the dashboard will be available at:
 ```
-https://[username].github.io/red_pill_rally_loop.mp3/
+https://divinedesign333.github.io/red_pill_rally_loop.mp3/
 ```
 
 #### Manual Deployment
