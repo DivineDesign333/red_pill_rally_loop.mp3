@@ -1,5 +1,3 @@
-# red_pill_rally_loop.mp3
-
 ## Configuration
 
 This project supports the following configuration options:
