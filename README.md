@@ -75,4 +75,4 @@ curl https://localai.io/install.sh | sh -s -- --uninstall
 
 ### Script Location
 
-The installation script is located at: `install.sh` in this repository.
+The installation script is located at: `install.sh` in this repository ###
