@@ -1,13 +1,13 @@
 # red_pill_rally_loop.mp3
 
-This repository contains the `red_pill_rally_loop.mp3` audio file reference and a LocalAI installation script.
+This repository (`red_pill_rally_loop.mp3`) contains a LocalAI installation script.
 
 ## Configuration
 
 This project supports the following configuration options:
 
 - `USE_VULKAN=true` - Enable Vulkan graphics API support
-- `USE_AIO=true` - Enable Async I/O support (all-in-one LocalAI image)
+- `USE_AIO=true` - Enable all-in-one LocalAI image (includes common models)
 
 Configuration can be set via environment variables when running the installation script (see examples below).
 
