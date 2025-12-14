@@ -51,3 +51,44 @@ A modular Pine Script strategy for TradingView that integrates W/M pattern detec
 ## 🏁 Getting Started
 
 ### 1. Install the Strategy
+- Open **TradingView → Pine Editor**.  
+- Copy & paste the full script code from this repository.  
+- Click **Add to Chart**.  
+- Save the script to your TradingView account.
+
+### 2. Configure Parameters
+- Adjust inputs:  
+  - **Risk % per Trade** (default: 1%)  
+  - **Take Profit %** (default: 5%)  
+  - **Stop Loss %** (default: 2%)  
+  - **Cash Reserve %** (default: 20%)  
+  - **Max Exposure %** (default: 80%)  
+
+### 3. Set Up Alerts
+- Go to **TradingView → Create Alert**.  
+- Select `Mastery Evolution Tree` in the condition dropdown.  
+- Choose from: W Pattern Renewal, M Pattern Convergence, Woodpecker Tap, Take Profit Trigger, Stop Loss Trigger, Cash X Overexposed, Cash X Low Reserve.  
+
+### 4. Test & Validate
+- Run in backtest mode to confirm signals and risk logic.  
+- Adjust parameters to fit your trading style.  
+- Use alerts in live mode for automated notifications.
+
+---
+
+## 📦 Cash X Module (Code Snippet)
+
+```pinescript
+//@version=5
+strategy("Mastery Evolution Tree + Cash X", overlay=true, initial_capital=10000, default_qty_type=strategy.percent_of_equity)
+
+// Inputs
+cashReservePct = input.float(20.0, "Cash Reserve %", minval=0, maxval=100)
+maxExposurePct = input.float(80.0, "Max Exposure %", minval=0, maxval=100)
+
+// Example calculation (pseudo-code for demonstration)
+currentExposure = (strategy.openprofit + strategy.opentrades) / strategy.equity * 100
+
+// Alerts
+alertcondition(currentExposure > maxExposurePct, title="Cash X Overexposed", message="Exposure exceeds max threshold")
+alertcondition((100 - currentExposure) < cashReservePct, title="Cash X Low Reserve", message="Cash reserve below minimum threshold")
