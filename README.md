@@ -92,3 +92,41 @@ currentExposure = (strategy.openprofit + strategy.opentrades) / strategy.equity 
 // Alerts
 alertcondition(currentExposure > maxExposurePct, title="Cash X Overexposed", message="Exposure exceeds max threshold")
 alertcondition((100 - currentExposure) < cashReservePct, title="Cash X Low Reserve", message="Cash reserve below minimum threshold")
+
+//@version=5
+strategy("Mastery Evolution Tree + Cash X", overlay=true, initial_capital=10000, default_qty_type=strategy.percent_of_equity)
+
+/*
+───────────────────────────────────────────────
+💵 CASH X MODULE
+───────────────────────────────────────────────
+Purpose:
+- Tracks cash exposure relative to account balance
+- Ensures liquidity buffer is maintained
+- Provides alerts when cash allocation crosses thresholds
+
+Inputs:
+- Cash Reserve % (default: 20%)
+    → Minimum % of account balance to keep in cash
+- Max Exposure % (default: 80%)
+    → Maximum % of account balance allowed in open positions
+
+Logic:
+1. Calculate current exposure = (open positions ÷ account balance)
+2. Compare against Max Exposure %
+3. Trigger alert if exposure > Max Exposure
+4. Trigger alert if cash reserve < Cash Reserve %
+
+───────────────────────────────────────────────
+*/
+
+// User inputs
+cashReservePct = input.float(20.0, "Cash Reserve %", minval=0, maxval=100)
+maxExposurePct = input.float(80.0, "Max Exposure %", minval=0, maxval=100)
+
+// Example calculation (pseudo-code for demonstration)
+currentExposure = (strategy.openprofit + strategy.opentrades) / strategy.equity * 100
+
+// Alerts
+alertcondition(currentExposure > maxExposurePct, title="Cash X Overexposed", message="Exposure exceeds max threshold")
+alertcondition((100 - currentExposure) < cashReservePct, title="Cash X Low Reserve", message="Cash reserve below minimum threshold")
