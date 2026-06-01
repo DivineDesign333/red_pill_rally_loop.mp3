@@ -1,0 +1,142 @@
+{{- if .Values.networkPolicy.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "tv-signing-relay.fullname" . }}-hardened
+  labels:
+    app: {{ include "tv-signing-relay.fullname" . }}
+    policy: hardened
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ include "tv-signing-relay.fullname" . }}
+  policyTypes:
+    - Ingress
+    - Egress
+
+  # INGRESS: Allow only from operator namespace and optional whitelisted CIDRs
+  ingress:
+    # Allow from operator namespace (default)
+    {{- if .Values.networkPolicy.allowOperatorNamespace }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ .Values.networkPolicy.operatorNamespaceLabel.name }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.targetPort }}
+    {{- end }}
+
+    # Allow from whitelisted CIDRs (e.g., TradingView relay, operator VPN)
+    {{- range .Values.networkPolicy.allowedCIDRs }}
+    - from:
+        - ipBlock:
+            cidr: {{ . }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.targetPort }}
+    {{- end }}
+
+    # Allow from Kubernetes API server (for probes and metrics)
+    - from:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              component: kubelet
+      ports:
+        - protocol: TCP
+          port: {{ .Values.service.targetPort }}
+
+  # EGRESS: Strict outbound rules
+  egress:
+    # Allow DNS queries (internal and external)
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+
+    # Allow to Redis (for session/cache if needed)
+    {{- if .Values.redis.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: {{ .Values.redis.port | default 6379 }}
+    {{- end }}
+
+    # Allow to S3-compatible endpoint (e.g., MinIO, AWS S3)
+    {{- if .Values.s3.enabled }}
+    - to:
+        - ipBlock:
+            cidr: {{ .Values.s3.cidr | default "0.0.0.0/0" }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.s3.port | default 443 }}
+    {{- end }}
+
+    # Allow to TradingView relay and signing upstream (via whitelisted CIDRs)
+    {{- range .Values.networkPolicy.upstreamCIDRs }}
+    - to:
+        - ipBlock:
+            cidr: {{ . }}
+      ports:
+        - protocol: TCP
+          port: 443
+    {{- end }}
+
+    # Allow to Prometheus/metrics endpoint (if scraping)
+    {{- if .Values.prometheus.enabled }}
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ .Values.prometheus.namespace | default "monitoring" }}
+          podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - protocol: TCP
+          port: {{ .Values.prometheus.port | default 9090 }}
+    {{- end }}
+
+    # Allow to external logging (e.g., Datadog, ELK)
+    {{- if .Values.logging.enabled }}
+    - to:
+        - ipBlock:
+            cidr: {{ .Values.logging.cidr | default "0.0.0.0/0" }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.logging.port | default 443 }}
+    {{- end }}
+
+    # Allow ICMP for diagnostics (optional)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: ICMP
+
+---
+# Additional NetworkPolicy: Deny all by default (deny-all fallback)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "tv-signing-relay.fullname" . }}-deny-all
+  labels:
+    app: {{ include "tv-signing-relay.fullname" . }}
+    policy: deny-all
+spec:
+  podSelector:
+    matchLabels:
+      app: {{ include "tv-signing-relay.fullname" . }}
+  policyTypes:
+    - Ingress
+    - Egress
+  # Empty ingress/egress: denies all traffic unless explicitly allowed by another policy
+
+{{- end }}
