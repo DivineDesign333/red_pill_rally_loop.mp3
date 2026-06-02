@@ -1,0 +1,209 @@
+name: tv-signing-relay Canary Promotion
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'charts/tv-signing-relay/**'
+      - '.github/workflows/tv-signing-relay-canary-promotion.yml'
+
+jobs:
+  canary-health-check:
+    name: Canary Health Check (Prometheus)
+    runs-on: ubuntu-latest
+    outputs:
+      error_rate: ${{ steps.query.outputs.error_rate }}
+      p95_latency: ${{ steps.query.outputs.p95_latency }}
+      promotion_gate: ${{ steps.gate.outputs.promotion_gate }}
+    env:
+      PROMETHEUS_URL: ${{ secrets.PROMETHEUS_URL }}
+      PROMETHEUS_TOKEN: ${{ secrets.PROMETHEUS_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Query Prometheus for canary metrics
+        id: query
+        run: |
+          set -euo pipefail
+          
+          # 10-minute observation window for canary (track="canary")
+          CANARY_ERR_EXPR='sum(increase(tvsigningrelayerrorstotal{track="canary"}[10m])) / max(1, sum(increase(tvsigningrelayrequeststotal{track="canary"}[10m])))'
+          CANARY_LAT_EXPR='histogram_quantile(0.95, sum(rate(tvsigningrelayrequestdurationsecondsbucket{track="canary"}[10m])) by (le))'
+          
+          # Query helper
+          query_prom() {
+            local expr="$1"
+            curl -sS -G \
+              -H "Authorization: Bearer ${PROMETHEUS_TOKEN}" \
+              --data-urlencode "query=${expr}" \
+              "${PROMETHEUS_URL}/api/v1/query" | jq -r '.data.result[0].value[1] // "null"'
+          }
+          
+          ERR_RATE=$(query_prom "$CANARY_ERR_EXPR")
+          P95_LAT=$(query_prom "$CANARY_LAT_EXPR")
+          
+          echo "Canary error rate (10m): ${ERR_RATE}"
+          echo "Canary p95 latency (10m): ${P95_LAT}s"
+          
+          echo "error_rate=${ERR_RATE}" >> "$GITHUB_OUTPUT"
+          echo "p95_latency=${P95_LAT}" >> "$GITHUB_OUTPUT"
+
+      - name: Evaluate promotion gate
+        id: gate
+        run: |
+          set -euo pipefail
+          
+          ERR_RATE="${{ steps.query.outputs.error_rate }}"
+          P95_LAT="${{ steps.query.outputs.p95_latency }}"
+          
+          # Gate thresholds
+          MAX_ERR_RATE=0.02  # 2%
+          MAX_P95_LAT=0.8    # 800ms
+          
+          PROMOTION_GATE="true"
+          
+          # Check error rate
+          if [ "${ERR_RATE}" != "null" ]; then
+            if (( $(echo "${ERR_RATE} > ${MAX_ERR_RATE}" | bc -l) )); then
+              echo "::error::Canary error rate exceeds threshold: ${ERR_RATE} > ${MAX_ERR_RATE}"
+              PROMOTION_GATE="false"
+            fi
+          fi
+          
+          # Check p95 latency
+          if [ "${P95_LAT}" != "null" ]; then
+            if (( $(echo "${P95_LAT} > ${MAX_P95_LAT}" | bc -l) )); then
+              echo "::error::Canary p95 latency exceeds threshold: ${P95_LAT} > ${MAX_P95_LAT}"
+              PROMOTION_GATE="false"
+            fi
+          fi
+          
+          echo "promotion_gate=${PROMOTION_GATE}" >> "$GITHUB_OUTPUT"
+          
+          if [ "${PROMOTION_GATE}" = "false" ]; then
+            echo "::notice::Canary promotion gate BLOCKED"
+            exit 1
+          else
+            echo "::notice::Canary promotion gate PASSED"
+          fi
+
+      - name: Post PR comment (canary status)
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const er = "${{ steps.query.outputs.error_rate }}";
+            const lat = "${{ steps.query.outputs.p95_latency }}";
+            const gate = "${{ steps.gate.outputs.promotion_gate }}";
+            
+            const body = `**Canary Health Check**
+            
+            - Error Rate (10m): ${er || 'N/A'}
+            - P95 Latency (10m): ${lat ? lat + 's' : 'N/A'}
+            - Promotion Gate: ${gate === 'true' ? '✅ PASSED' : '❌ BLOCKED'}
+            `;
+            
+            if (context.payload.pull_request) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body
+              });
+            }
+
+  promote-stable:
+    name: Promote Canary to Stable
+    needs: [canary-health-check]
+    if: needs.canary-health-check.outputs.promotion_gate == 'true'
+    runs-on: ubuntu-latest
+    env:
+      NAMESPACE: operator
+      RELEASE_NAME: tv-signing-relay
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure kubectl
+        run: |
+          mkdir -p "${HOME}/.kube"
+          echo "${KUBECONFIG_BASE64}" | base64 -d > "${HOME}/.kube/config"
+          chmod 600 "${HOME}/.kube/config"
+        env:
+          KUBECONFIG_BASE64: ${{ secrets.KUBECONFIG_BASE64 }}
+
+      - name: Get canary image
+        id: canary-image
+        run: |
+          set -euo pipefail
+          
+          CANARY_IMG=$(kubectl -n "${NAMESPACE}" get deploy "${RELEASE_NAME}-canary" \
+            -o jsonpath='{.spec.template.spec.containers[0].image}' 2>/dev/null || echo "")
+          
+          if [ -z "${CANARY_IMG}" ]; then
+            echo "::error::Canary deployment not found or has no image"
+            exit 1
+          fi
+          
+          echo "image=${CANARY_IMG}" >> "$GITHUB_OUTPUT"
+          echo "Promoting image: ${CANARY_IMG}"
+
+      - name: Update stable deployment
+        run: |
+          set -euo pipefail
+          
+          CANARY_IMG="${{ steps.canary-image.outputs.image }}"
+          
+          echo "Patching stable deployment with canary image: ${CANARY_IMG}"
+          kubectl -n "${NAMESPACE}" set image deployment/"${RELEASE_NAME}" \
+            nginx-proxy="${CANARY_IMG}" \
+            --record
+
+      - name: Wait for stable rollout
+        run: |
+          set -euo pipefail
+          
+          echo "Waiting for rollout..."
+          kubectl -n "${NAMESPACE}" rollout status deployment/"${RELEASE_NAME}" \
+            --timeout=5m
+          
+          echo "Rollout complete"
+
+      - name: Verify stable health
+        run: |
+          set -euo pipefail
+          
+          echo "Verifying stable deployment health..."
+          
+          # Check pod readiness
+          kubectl -n "${NAMESPACE}" get pods -l app="${RELEASE_NAME}",track=stable \
+            -o jsonpath='{.items[*].status.conditions[?(@.type=="Ready")].status}' | grep -q "True" || {
+            echo "::error::Stable pods not ready after promotion"
+            exit 1
+          }
+          
+          echo "Stable deployment is healthy"
+
+      - name: Post promotion summary
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const img = "${{ steps.canary-image.outputs.image }}";
+            const body = `**Canary Promotion to Stable**
+            
+            ✅ Promotion completed
+            - Image: \`${img}\`
+            - Status: Stable deployment rolled out and healthy
+            `;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body
+            });

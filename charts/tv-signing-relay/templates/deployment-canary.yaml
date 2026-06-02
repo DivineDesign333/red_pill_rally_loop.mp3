@@ -1,0 +1,73 @@
+{{- if .Values.canary.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "tv-signing-relay.fullname" . }}-canary
+  labels:
+    app: {{ include "tv-signing-relay.fullname" . }}
+    track: canary
+spec:
+  replicas: {{ .Values.canary.replicas }}
+  selector:
+    matchLabels:
+      app: {{ include "tv-signing-relay.fullname" . }}
+      track: canary
+  template:
+    metadata:
+      labels:
+        app: {{ include "tv-signing-relay.fullname" . }}
+        track: canary
+      annotations:
+        {{- with .Values.canary.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      containers:
+        - name: nginx-proxy
+          image: "{{ .Values.image.repository }}:{{ .Values.canary.image.tag | default .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.service.targetPort }}
+              name: https
+          volumeMounts:
+            - name: nginx-conf
+              mountPath: /etc/nginx/conf.d
+            - name: tls
+              mountPath: /etc/nginx/certs
+              readOnly: true
+            - name: htpasswd
+              mountPath: /etc/nginx/htpasswd
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              scheme: HTTPS
+              path: {{ .Values.readinessProbe.path }}
+              port: {{ .Values.readinessProbe.port }}
+            initialDelaySeconds: {{ .Values.readinessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.readinessProbe.periodSeconds }}
+            failureThreshold: {{ .Values.readinessProbe.failureThreshold }}
+          livenessProbe:
+            httpGet:
+              scheme: HTTPS
+              path: {{ .Values.livenessProbe.path }}
+              port: {{ .Values.livenessProbe.port }}
+            initialDelaySeconds: {{ .Values.livenessProbe.initialDelaySeconds }}
+            periodSeconds: {{ .Values.livenessProbe.periodSeconds }}
+          resources:
+{{ toYaml .Values.resources | indent 12 }}
+          {{- range .Values.canary.extraEnv }}
+          env:
+            - name: {{ .name }}
+              value: {{ .value | quote }}
+          {{- end }}
+      volumes:
+        - name: nginx-conf
+          configMap:
+            name: {{ include "tv-signing-relay.fullname" . }}-config
+        - name: tls
+          secret:
+            secretName: {{ include "tv-signing-relay.fullname" . }}-tls
+        - name: htpasswd
+          secret:
+            secretName: {{ include "tv-signing-relay.fullname" . }}-htpasswd
+{{- end }}
