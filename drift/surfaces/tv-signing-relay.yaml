@@ -1,0 +1,94 @@
+id: tv-signing-relay
+kind: service
+owner: signing
+description: >
+  TV signing relay service. Canary + stable deployments with Prometheus-backed promotion gate.
+  Invariants enforce canary parity with stable: error rates and latencies must not drift beyond
+  acceptable thresholds.
+
+kubernetes:
+  namespace: operator
+  deployments:
+    - name: tv-signing-relay
+      track: stable
+    - name: tv-signing-relay-canary
+      track: canary
+
+prometheus:
+  # Core invariants: canary must track stable within acceptable bounds
+  invariants:
+    - name: error_rate_canary_vs_stable
+      description: >
+        Canary error rate must not be >2% worse than stable.
+        If canary error rate diverges significantly, it indicates a regression.
+      expr: |
+        abs(
+          (
+            sum(increase(tvsigningrelayerrorstotal{track="canary"}[10m])) /
+            max(1, sum(increase(tvsigningrelayrequeststotal{track="canary"}[10m])))
+          )
+          -
+          (
+            sum(increase(tvsigningrelayerrorstotal{track="stable"}[10m])) /
+            max(1, sum(increase(tvsigningrelayrequeststotal{track="stable"}[10m])))
+          )
+        )
+      max_abs_delta: 0.02
+      window: 10m
+      severity: critical
+
+    - name: p95_latency_canary_vs_stable
+      description: >
+        Canary p95 latency must not be >200ms worse than stable.
+        Latency regressions indicate performance degradation or resource contention.
+      expr: |
+        abs(
+          histogram_quantile(
+            0.95,
+            sum(rate(tvsigningrelayrequestdurationsecondsbucket{track="canary"}[10m])) by (le)
+          )
+          -
+          histogram_quantile(
+            0.95,
+            sum(rate(tvsigningrelayrequestdurationsecondsbucket{track="stable"}[10m])) by (le)
+          )
+        )
+      max_abs_delta: 0.2
+      window: 10m
+      severity: warning
+
+    - name: signature_failure_rate
+      description: >
+        Signature failures must be zero or near-zero. Any increase suggests key material issues.
+      expr: |
+        increase(tvsigningrelaysignaturefailures_total{track="canary"}[10m])
+      max_value: 0
+      window: 10m
+      severity: critical
+
+    - name: candidate_write_errors
+      description: >
+        Candidate write errors must be zero. Any increase suggests storage or persistence issues.
+      expr: |
+        increase(tvadaptercandidatewriteerrors_total[10m])
+      max_value: 0
+      window: 10m
+      severity: critical
+
+# Promotion gate thresholds
+promotion:
+  requires_all_invariants: true
+  grace_period_minutes: 10
+  observation_window_minutes: 10
+  max_allowed_violations: 0
+
+# Rollback triggers
+rollback:
+  enabled: true
+  triggers:
+    - invariant: error_rate_canary_vs_stable
+      violation_count: 3  # 3 consecutive violations trigger rollback
+    - invariant: signature_failure_rate
+      violation_count: 1  # immediate rollback for crypto failures
+    - invariant: candidate_write_errors
+      violation_count: 1  # immediate rollback for persistence failures

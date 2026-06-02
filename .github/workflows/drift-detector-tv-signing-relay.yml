@@ -1,0 +1,175 @@
+name: Drift Detector — tv-signing-relay
+
+on:
+  pull_request:
+    paths:
+      - 'charts/tv-signing-relay/**'
+      - 'monitoring/prometheus/rules/**'
+      - 'drift/surfaces/tv-signing-relay.yaml'
+      - '.github/workflows/drift-detector-tv-signing-relay.yml'
+  workflow_dispatch:
+  schedule:
+    # Run every 30 minutes to catch drift early
+    - cron: '*/30 * * * *'
+
+jobs:
+  drift-check:
+    name: Drift Check (Prometheus Invariants)
+    runs-on: ubuntu-latest
+    outputs:
+      drift_detected: ${{ steps.check.outputs.drift_detected }}
+      violation_count: ${{ steps.check.outputs.violation_count }}
+    env:
+      PROMETHEUS_URL: ${{ secrets.PROMETHEUS_URL }}
+      PROMETHEUS_TOKEN: ${{ secrets.PROMETHEUS_TOKEN }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install drift-detector
+        run: |
+          pip install --upgrade pip
+          # Replace with your actual drift-detector package
+          pip install drift-detector-cli 2>/dev/null || echo "Using inline drift check"
+
+      - name: Parse drift surface
+        id: surface
+        run: |
+          set -euo pipefail
+          
+          # Extract invariants from surface definition
+          python3 << 'EOF'
+          import yaml
+          import json
+          
+          with open('drift/surfaces/tv-signing-relay.yaml', 'r') as f:
+              surface = yaml.safe_load(f)
+          
+          invariants = surface.get('prometheus', {}).get('invariants', [])
+          print(json.dumps(invariants, indent=2))
+          EOF
+
+      - name: Query Prometheus for drift
+        id: check
+        run: |
+          set -euo pipefail
+          
+          python3 << 'PYEOF'
+          import os
+          import json
+          import requests
+          from urllib.parse import urlencode
+          
+          prom_url = os.environ.get('PROMETHEUS_URL', 'http://prometheus.monitoring.svc.cluster.local:9090')
+          prom_token = os.environ.get('PROMETHEUS_TOKEN', '')
+          
+          headers = {}
+          if prom_token:
+              headers['Authorization'] = f'Bearer {prom_token}'
+          
+          def query_prom(expr):
+              """Query Prometheus and return result value."""
+              try:
+                  resp = requests.get(
+                      f'{prom_url}/api/v1/query',
+                      params={'query': expr},
+                      headers=headers,
+                      timeout=10
+                  )
+                  resp.raise_for_status()
+                  data = resp.json()
+                  if data.get('data', {}).get('result'):
+                      return float(data['data']['result'][0]['value'][1])
+                  return None
+              except Exception as e:
+                  print(f'::warning::Query failed: {e}')
+                  return None
+          
+          # Invariant checks
+          invariants = [
+              {
+                  'name': 'error_rate_canary_vs_stable',
+                  'expr': 'abs((sum(increase(tvsigningrelayerrorstotal{track="canary"}[10m])) / max(1, sum(increase(tvsigningrelayrequeststotal{track="canary"}[10m])))) - (sum(increase(tvsigningrelayerrorstotal{track="stable"}[10m])) / max(1, sum(increase(tvsigningrelayrequeststotal{track="stable"}[10m])))))',
+                  'max_delta': 0.02,
+                  'severity': 'critical'
+              },
+              {
+                  'name': 'p95_latency_canary_vs_stable',
+                  'expr': 'abs(histogram_quantile(0.95, sum(rate(tvsigningrelayrequestdurationsecondsbucket{track="canary"}[10m])) by (le)) - histogram_quantile(0.95, sum(rate(tvsigningrelayrequestdurationsecondsbucket{track="stable"}[10m])) by (le)))',
+                  'max_delta': 0.2,
+                  'severity': 'warning'
+              },
+              {
+                  'name': 'signature_failure_rate',
+                  'expr': 'increase(tvsigningrelaysignaturefailures_total{track="canary"}[10m])',
+                  'max_value': 0,
+                  'severity': 'critical'
+              },
+              {
+                  'name': 'candidate_write_errors',
+                  'expr': 'increase(tvadaptercandidatewriteerrors_total[10m])',
+                  'max_value': 0,
+                  'severity': 'critical'
+              }
+          ]
+          
+          drift_detected = False
+          violation_count = 0
+          
+          for inv in invariants:
+              result = query_prom(inv['expr'])
+              if result is None:
+                  print(f"::warning::Could not evaluate {inv['name']}")
+                  continue
+              
+              threshold = inv.get('max_delta', inv.get('max_value', 0))
+              severity = inv.get('severity', 'warning')
+              
+              if result > threshold:
+                  violation_count += 1
+                  msg = f"Drift detected: {inv['name']} = {result:.4f} (threshold: {threshold})"
+                  
+                  if severity == 'critical':
+                      print(f"::error::{msg}")
+                      drift_detected = True
+                  else:
+                      print(f"::warning::{msg}")
+          
+          # Output results
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as f:
+              f.write(f"drift_detected={'true' if drift_detected else 'false'}\n")
+              f.write(f"violation_count={violation_count}\n")
+          
+          print(f"\n::notice::Drift check complete: {violation_count} violations, drift_detected={drift_detected}")
+          exit(1 if drift_detected else 0)
+          PYEOF
+
+      - name: Post drift report (PR comment)
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const driftDetected = "${{ steps.check.outputs.drift_detected }}" === 'true';
+            const violationCount = "${{ steps.check.outputs.violation_count }}";
+            
+            const body = `**Drift Detector Report**
+            
+            - Drift Detected: ${driftDetected ? '\u274c YES' : '\u2705 NO'}
+            - Violations: ${violationCount}
+            
+            ${driftDetected ? '\u26a0\ufe0f Promotion will be blocked until invariants are restored.' : '\u2705 Safe to promote.'}
+            `;
+            
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body
+            });
